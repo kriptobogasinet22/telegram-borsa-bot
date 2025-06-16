@@ -213,7 +213,6 @@ class Database {
   }
 
   async removeUserFavorite(userId: number, stockCode: string) {
-    // Supabase DELETE için özel URL yapısı gerekiyor
     try {
       const url = `${this.supabaseUrl}/rest/v1/user_favorites?user_id=eq.${userId}&stock_code=eq.${stockCode.toUpperCase()}`
 
@@ -256,7 +255,6 @@ class Database {
 class StockAPI {
   async getStockPrice(symbol: string) {
     try {
-      // Mock data - gerçek API ile değiştirin
       const basePrice = 25 + Math.random() * 50
       return {
         symbol: symbol.toUpperCase(),
@@ -388,7 +386,6 @@ Katılma isteği gönderdiğiniz için botu kullanabilirsiniz!
 • /derinlik hissekodu – 25 kademe anlık derinlik
 • /teorik hissekodu – Anlık Teorik veri sorgusu
 • /temel hissekodu – Şirket finansalları
-• /teknik hissekodu – Teknik göstergeler
 • /haber hissekodu – KAP haberleri
 
 💹 <b>Yatırım Araçları</b>
