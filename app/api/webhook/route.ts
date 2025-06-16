@@ -34,26 +34,6 @@ class TelegramBot {
     }
   }
 
-  async getChatMember(chatId: string, userId: number) {
-    try {
-      const response = await fetch(`${this.baseUrl}/getChatMember`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          chat_id: chatId,
-          user_id: userId,
-        }),
-      })
-
-      return response.json()
-    } catch (error) {
-      console.error("Get chat member error:", error)
-      return { ok: false }
-    }
-  }
-
   async answerCallbackQuery(callbackQueryId: string, text?: string) {
     try {
       const response = await fetch(`${this.baseUrl}/answerCallbackQuery`, {
@@ -71,27 +51,6 @@ class TelegramBot {
       return response.json()
     } catch (error) {
       console.error("Answer callback query error:", error)
-      return { ok: false }
-    }
-  }
-
-  // Join request'i otomatik onaylama
-  async approveChatJoinRequest(chatId: number, userId: number) {
-    try {
-      const response = await fetch(`${this.baseUrl}/approveChatJoinRequest`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          chat_id: chatId,
-          user_id: userId,
-        }),
-      })
-
-      return response.json()
-    } catch (error) {
-      console.error("Approve join request error:", error)
       return { ok: false }
     }
   }
@@ -292,6 +251,11 @@ class Database {
       return false
     }
   }
+
+  async getAllUsers() {
+    const result = await this.query("users", "GET")
+    return result || []
+  }
 }
 
 // Stock API sınıfı
@@ -415,6 +379,7 @@ class BotCommands {
       return
     }
 
+    // Join request var mı kontrol et
     const joinRequest = await this.db.getJoinRequest(userId, Number.parseInt(mainChannelId))
 
     let message = `🔒 <b>Private Kanal Üyeliği Gerekli</b>
@@ -428,11 +393,12 @@ Bot'u kullanabilmek için özel kanalımıza katılma isteği göndermelisiniz.
     }
 
     if (joinRequest) {
+      // Join request varsa direkt aktif et
       await this.db.updateUserMembership(userId, true)
 
       const welcomeMessage = `✅ <b>Hoş geldiniz!</b>
 
-Katılma isteğiniz onaylandı! Artık botu kullanabilirsiniz.
+Katılma isteği gönderdiğiniz için botu kullanabilirsiniz!
 
 🔍 <b>Anlık ve Detaylı Veriler</b>
 • /derinlik hissekodu – 25 kademe anlık derinlik
@@ -453,10 +419,10 @@ Katılma isteğiniz onaylandı! Artık botu kullanabilirsiniz.
       message += `📝 <b>Katılım Süreci:</b>
 1. Aşağıdaki linke tıklayın
 2. "Katılma İsteği Gönder" butonuna basın
-3. İsteğiniz otomatik onaylanacak
-4. Bot'u kullanmaya başlayın
+3. İstek gönderdiğiniz anda bot aktif olur
+4. Onay beklemenize gerek yok!
 
-👆 Katılma isteği gönderdiğiniz anda bot aktif olacak!`
+👆 Sadece istek gönderin, hemen kullanmaya başlayın!`
 
       if (inviteLink) {
         keyboard.inline_keyboard.push([{ text: "🔗 Kanala Katılma İsteği Gönder", url: inviteLink }])
@@ -691,7 +657,7 @@ export async function POST(request: NextRequest) {
     const commands = new BotCommands(bot)
     const db = new Database()
 
-    // Handle join requests - OTOMATIK ONAY
+    // Handle join requests - SADECE KAYDET, ONAYLAMA!
     if (update.chat_join_request) {
       const { chat_join_request } = update
       const userId = chat_join_request.from.id
@@ -709,18 +675,14 @@ export async function POST(request: NextRequest) {
         bio: chat_join_request.bio,
       })
 
-      // Otomatik onay
-      const approveResult = await bot.approveChatJoinRequest(chatId, userId)
-      console.log("Auto-approve result:", approveResult)
-
-      // Kullanıcıyı aktif üye yap
+      // Kullanıcıyı aktif üye yap (istek attığı için)
       await db.updateUserMembership(userId, true)
 
-      // Hoş geldin mesajı gönder
+      // Bilgilendirme mesajı gönder
       try {
-        const welcomeMessage = `🎉 <b>Hoş geldiniz!</b>
+        const welcomeMessage = `✅ <b>Katılma İsteği Alındı!</b>
 
-Katılma isteğiniz otomatik olarak onaylandı!
+Artık botu kullanabilirsiniz! İsteğiniz admin tarafından değerlendirilecek.
 
 🚀 <b>Başlamak için:</b>
 • /start - Ana menü
@@ -731,7 +693,7 @@ Katılma isteğiniz otomatik olarak onaylandı!
 • /temel AKBNK  
 • /haber GARAN
 
-Artık tüm bot özelliklerini kullanabilirsiniz! 📈`
+Bot'u hemen kullanmaya başlayabilirsiniz! 📈`
 
         await bot.sendMessage(userId, welcomeMessage)
       } catch (error) {
