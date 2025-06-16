@@ -74,6 +74,49 @@ class TelegramBot {
       return { ok: false }
     }
   }
+
+  // Join request'i otomatik onaylama
+  async approveChatJoinRequest(chatId: number, userId: number) {
+    try {
+      const response = await fetch(`${this.baseUrl}/approveChatJoinRequest`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          user_id: userId,
+        }),
+      })
+
+      return response.json()
+    } catch (error) {
+      console.error("Approve join request error:", error)
+      return { ok: false }
+    }
+  }
+
+  // Invite link oluşturma
+  async createChatInviteLink(chatId: number, name?: string) {
+    try {
+      const response = await fetch(`${this.baseUrl}/createChatInviteLink`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          name: name || "Bot Kullanıcıları",
+          creates_join_request: true, // Join request oluşturacak
+        }),
+      })
+
+      return response.json()
+    } catch (error) {
+      console.error("Create invite link error:", error)
+      return { ok: false }
+    }
+  }
 }
 
 // Supabase Database sınıfı
@@ -364,12 +407,21 @@ class BotCommands {
       last_name: userData.last_name,
     })
 
-    const mainChannelLink = (await this.db.getSetting("main_channel_link")) || "@your_channel"
     const mainChannelId = await this.db.getSetting("main_channel_id")
+    const inviteLink = await this.db.getSetting("invite_link")
 
-    const joinRequest = mainChannelId ? await this.db.getJoinRequest(userId, Number.parseInt(mainChannelId)) : null
+    if (!mainChannelId) {
+      await this.bot.sendMessage(chatId, "❌ Bot henüz yapılandırılmamış. Admin ile iletişime geçin.")
+      return
+    }
 
-    let message = `🚫 Bot'u kullanabilmek için kanalımıza katılma isteği göndermelisiniz:\n\n• <b>Ana Kanal</b> - ${mainChannelLink}\n\n`
+    const joinRequest = await this.db.getJoinRequest(userId, Number.parseInt(mainChannelId))
+
+    let message = `🔒 <b>Private Kanal Üyeliği Gerekli</b>
+
+Bot'u kullanabilmek için özel kanalımıza katılma isteği göndermelisiniz.
+
+`
 
     const keyboard = {
       inline_keyboard: [] as any[],
@@ -380,7 +432,7 @@ class BotCommands {
 
       const welcomeMessage = `✅ <b>Hoş geldiniz!</b>
 
-Katılma isteği gönderdiğiniz için botu kullanabilirsiniz!
+Katılma isteğiniz onaylandı! Artık botu kullanabilirsiniz.
 
 🔍 <b>Anlık ve Detaylı Veriler</b>
 • /derinlik hissekodu – 25 kademe anlık derinlik
@@ -398,10 +450,17 @@ Katılma isteği gönderdiğiniz için botu kullanabilirsiniz!
       await this.bot.sendMessage(chatId, welcomeMessage)
       return
     } else {
-      message += `👆 Kanala katılma isteği gönderin, istek gönderdiğiniz anda botu kullanabilirsiniz.`
-      keyboard.inline_keyboard.push([
-        { text: "🔗 Katılma İsteği Gönder", url: `https://t.me/${mainChannelLink?.replace("@", "")}` },
-      ])
+      message += `📝 <b>Katılım Süreci:</b>
+1. Aşağıdaki linke tıklayın
+2. "Katılma İsteği Gönder" butonuna basın
+3. İsteğiniz otomatik onaylanacak
+4. Bot'u kullanmaya başlayın
+
+👆 Katılma isteği gönderdiğiniz anda bot aktif olacak!`
+
+      if (inviteLink) {
+        keyboard.inline_keyboard.push([{ text: "🔗 Kanala Katılma İsteği Gönder", url: inviteLink }])
+      }
       keyboard.inline_keyboard.push([{ text: "✅ İstek Gönderdiysem Kontrol Et", callback_data: "check_membership" }])
     }
 
@@ -439,7 +498,10 @@ Katılma isteğiniz mevcut, botu kullanabilirsiniz!
 
       await this.bot.sendMessage(chatId, welcomeMessage)
     } else {
-      await this.bot.sendMessage(chatId, "❌ Henüz kanala katılma isteği göndermemişsiniz. Lütfen önce istek gönderin.")
+      await this.bot.sendMessage(
+        chatId,
+        "❌ Henüz kanala katılma isteği göndermemişsiniz. Lütfen önce yukarıdaki linkten istek gönderin.",
+      )
     }
   }
 
@@ -629,12 +691,15 @@ export async function POST(request: NextRequest) {
     const commands = new BotCommands(bot)
     const db = new Database()
 
-    // Handle join requests
+    // Handle join requests - OTOMATIK ONAY
     if (update.chat_join_request) {
       const { chat_join_request } = update
       const userId = chat_join_request.from.id
       const chatId = chat_join_request.chat.id
 
+      console.log(`📝 Join request received from user ${userId} for chat ${chatId}`)
+
+      // Database'e kaydet
       await db.createJoinRequest({
         user_id: userId,
         chat_id: chatId,
@@ -644,12 +709,18 @@ export async function POST(request: NextRequest) {
         bio: chat_join_request.bio,
       })
 
+      // Otomatik onay
+      const approveResult = await bot.approveChatJoinRequest(chatId, userId)
+      console.log("Auto-approve result:", approveResult)
+
+      // Kullanıcıyı aktif üye yap
       await db.updateUserMembership(userId, true)
 
+      // Hoş geldin mesajı gönder
       try {
-        const welcomeMessage = `✅ <b>Katılma isteğiniz alındı!</b>
+        const welcomeMessage = `🎉 <b>Hoş geldiniz!</b>
 
-Artık botu kullanabilirsiniz! İsteğiniz admin tarafından değerlendirilecek.
+Katılma isteğiniz otomatik olarak onaylandı!
 
 🚀 <b>Başlamak için:</b>
 • /start - Ana menü
@@ -658,7 +729,9 @@ Artık botu kullanabilirsiniz! İsteğiniz admin tarafından değerlendirilecek.
 <b>Popüler Komutlar:</b>
 • /derinlik THYAO
 • /temel AKBNK  
-• /haber GARAN`
+• /haber GARAN
+
+Artık tüm bot özelliklerini kullanabilirsiniz! 📈`
 
         await bot.sendMessage(userId, welcomeMessage)
       } catch (error) {
