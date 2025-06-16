@@ -3,32 +3,47 @@ import { Database } from "@/lib/database"
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("🔍 Settings GET request received")
+
     const mainChannelLink = await Database.getSetting("main_channel_link")
     const mainChannelId = await Database.getSetting("main_channel_id")
+    const inviteLink = await Database.getSetting("invite_link")
+
+    console.log("📊 Settings fetched:", { mainChannelLink, mainChannelId, inviteLink })
 
     return NextResponse.json({
       settings: {
         main_channel_link: mainChannelLink || "",
         main_channel_id: mainChannelId || "",
+        invite_link: inviteLink || "",
       },
     })
   } catch (error) {
-    console.error("Error fetching settings:", error)
+    console.error("❌ Error fetching settings:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { main_channel_link, main_channel_id } = await request.json()
+    const { main_channel_link, main_channel_id, invite_link } = await request.json()
 
-    console.log("Received settings:", { main_channel_link, main_channel_id })
+    console.log("📝 Received settings:", { main_channel_link, main_channel_id, invite_link })
 
-    // Her iki ayarı da güncelle
-    const linkResult = await Database.updateSetting("main_channel_link", main_channel_link || "")
-    const idResult = await Database.updateSetting("main_channel_id", main_channel_id || "")
+    // Tüm ayarları güncelle
+    if (main_channel_link !== undefined) {
+      await Database.updateSetting("main_channel_link", main_channel_link || "")
+    }
 
-    console.log("Update results:", { linkResult, idResult })
+    if (main_channel_id !== undefined) {
+      await Database.updateSetting("main_channel_id", main_channel_id || "")
+    }
+
+    if (invite_link !== undefined) {
+      await Database.updateSetting("invite_link", invite_link || "")
+    }
+
+    console.log("✅ Settings updated successfully")
 
     return NextResponse.json({
       success: true,
@@ -36,10 +51,11 @@ export async function POST(request: NextRequest) {
       updated: {
         main_channel_link,
         main_channel_id,
+        invite_link,
       },
     })
   } catch (error) {
-    console.error("Error updating settings:", error)
+    console.error("❌ Error updating settings:", error)
     return NextResponse.json(
       {
         error: "Ayarlar güncellenirken hata oluştu",
