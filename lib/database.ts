@@ -79,20 +79,56 @@ export class Database {
   }
 
   static async getSetting(key: string): Promise<string | null> {
-    const { data, error } = await supabase.from("settings").select("value").eq("key", key).single()
+    try {
+      console.log(`Getting setting: ${key}`)
 
-    if (error) return null
-    return data.value
+      const { data, error } = await supabase.from("settings").select("value").eq("key", key).single()
+
+      if (error) {
+        console.error(`Error getting setting ${key}:`, error)
+        return null
+      }
+
+      console.log(`Setting ${key} value:`, data?.value)
+      return data?.value || null
+    } catch (error) {
+      console.error(`Exception getting setting ${key}:`, error)
+      return null
+    }
   }
 
   static async updateSetting(key: string, value: string): Promise<void> {
-    const { error } = await supabase.from("settings").upsert({
-      key,
-      value,
-      updated_at: new Date().toISOString(),
-    })
+    try {
+      console.log(`Updating setting: ${key} = ${value}`)
 
-    if (error) throw error
+      const { data, error } = await supabase
+        .from("settings")
+        .upsert(
+          {
+            key,
+            value,
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: "key",
+          },
+        )
+        .select()
+
+      if (error) {
+        console.error(`Error updating setting ${key}:`, error)
+        throw error
+      }
+
+      console.log(`Successfully updated setting ${key}:`, data)
+
+      // Doğrulama için tekrar oku
+      const verification = await this.getSetting(key)
+      console.log(`Verification - ${key} is now:`, verification)
+    } catch (error) {
+      console.error(`Exception updating setting ${key}:`, error)
+      throw error
+    }
   }
 
   static async getUserFavorites(userId: number): Promise<UserFavorite[]> {
