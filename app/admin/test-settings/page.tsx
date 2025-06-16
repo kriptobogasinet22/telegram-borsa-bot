@@ -49,7 +49,7 @@ export default function TestSettingsPage() {
       // Test 1: Settings API endpoint
       console.log("🧪 Testing Settings API endpoint...")
       try {
-        const apiResponse = await fetch("/app/api/admin/settings")
+        const apiResponse = await fetch("/api/admin/settings")
         console.log("Settings API Response status:", apiResponse.status)
         console.log("Settings API Response headers:", Object.fromEntries(apiResponse.headers.entries()))
 
@@ -81,7 +81,7 @@ export default function TestSettingsPage() {
       // Test 2: Users API endpoint
       console.log("🧪 Testing Users API endpoint...")
       try {
-        const usersResponse = await fetch("/app/api/admin/users")
+        const usersResponse = await fetch("/api/admin/users")
         console.log("Users API Response status:", usersResponse.status)
 
         if (usersResponse.ok) {
@@ -112,7 +112,7 @@ export default function TestSettingsPage() {
       // Test 3: Webhook endpoint
       console.log("🧪 Testing Webhook endpoint...")
       try {
-        const webhookResponse = await fetch("/app/api/webhook")
+        const webhookResponse = await fetch("/api/webhook")
         console.log("Webhook Response status:", webhookResponse.status)
 
         if (webhookResponse.ok) {
@@ -193,11 +193,11 @@ export default function TestSettingsPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <Button onClick={() => testDirectPath("/app/api/admin/settings")} variant="outline" className="w-full">
-              📊 Settings API (app/api)
+            <Button onClick={() => testDirectPath("/api/admin/settings")} variant="outline" className="w-full">
+              📊 Settings API
             </Button>
-            <Button onClick={() => testDirectPath("/app/api/admin/users")} variant="outline" className="w-full">
-              👥 Users API (app/api)
+            <Button onClick={() => testDirectPath("/api/admin/users")} variant="outline" className="w-full">
+              👥 Users API
             </Button>
           </div>
 
