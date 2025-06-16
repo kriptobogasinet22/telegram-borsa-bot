@@ -62,12 +62,20 @@ export default function AdminPanel() {
 
   const fetchSettings = async () => {
     try {
+      console.log("Fetching settings...")
       const response = await fetch("/api/admin/settings")
       const data = await response.json()
-      setSettings({
-        main_channel_id: data.settings?.main_channel_id || "",
-        invite_link: data.settings?.invite_link || "",
-      })
+
+      console.log("Settings response:", data)
+
+      if (response.ok && data.settings) {
+        setSettings({
+          main_channel_id: data.settings.main_channel_id || "",
+          invite_link: data.settings.invite_link || "",
+        })
+      } else {
+        console.error("Settings fetch error:", data)
+      }
     } catch (error) {
       console.error("Error fetching settings:", error)
     }
@@ -81,7 +89,10 @@ export default function AdminPanel() {
       const response = await fetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        body: JSON.stringify({
+          main_channel_id: settings.main_channel_id,
+          invite_link: settings.invite_link,
+        }),
       })
 
       const result = await response.json()
@@ -89,7 +100,7 @@ export default function AdminPanel() {
 
       if (response.ok) {
         alert("✅ Ayarlar başarıyla güncellendi!")
-        await fetchSettings()
+        await fetchSettings() // Ayarları yeniden yükle
       } else {
         alert(`❌ Hata: ${result.error || "Bilinmeyen hata"}`)
       }
@@ -108,6 +119,8 @@ export default function AdminPanel() {
 
     setLoading(true)
     try {
+      console.log("Creating invite link for channel:", settings.main_channel_id)
+
       const response = await fetch("/api/admin/create-invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -115,9 +128,20 @@ export default function AdminPanel() {
       })
 
       const result = await response.json()
+      console.log("Create invite result:", result)
 
       if (response.ok && result.invite_link) {
-        setSettings({ ...settings, invite_link: result.invite_link })
+        // Ayarları güncelle
+        const newSettings = { ...settings, invite_link: result.invite_link }
+        setSettings(newSettings)
+
+        // Database'e kaydet
+        await fetch("/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newSettings),
+        })
+
         alert("✅ Davet linki oluşturuldu!")
       } else {
         alert(`❌ Hata: ${result.error || "Davet linki oluşturulamadı"}`)
@@ -135,8 +159,14 @@ export default function AdminPanel() {
       return
     }
 
+    if (!confirm(`${stats.totalUsers} kullanıcıya duyuru gönderilecek. Emin misiniz?`)) {
+      return
+    }
+
     setLoading(true)
     try {
+      console.log("Sending announcement to", stats.totalUsers, "users")
+
       const response = await fetch("/api/admin/announcement", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -144,10 +174,19 @@ export default function AdminPanel() {
       })
 
       const result = await response.json()
-      alert(`Duyuru gönderildi! ${result.sent} kullanıcıya ulaştı.`)
-      setAnnouncement("")
+      console.log("Announcement result:", result)
+
+      if (response.ok) {
+        alert(
+          `✅ Duyuru gönderildi!\n• Başarılı: ${result.sent}\n• Başarısız: ${result.failed || 0}\n• Toplam: ${result.total}`,
+        )
+        setAnnouncement("")
+      } else {
+        alert(`❌ Hata: ${result.error || "Duyuru gönderilemedi"}`)
+      }
     } catch (error) {
-      alert("Duyuru gönderilirken hata oluştu!")
+      console.error("Announcement error:", error)
+      alert("❌ Duyuru gönderilirken hata oluştu!")
     }
     setLoading(false)
   }
