@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Users, Settings, Send, CableIcon as Channel } from "lucide-react"
+import { Users, Settings, Send, CableIcon as Channel, LinkIcon } from "lucide-react"
 
 interface User {
   id: number
@@ -20,15 +20,15 @@ interface User {
 }
 
 interface AdminSettings {
-  main_channel_link: string
   main_channel_id: string
+  invite_link: string
 }
 
 export default function AdminPanel() {
   const [users, setUsers] = useState<User[]>([])
   const [settings, setSettings] = useState<AdminSettings>({
-    main_channel_link: "",
     main_channel_id: "",
+    invite_link: "",
   })
   const [announcement, setAnnouncement] = useState("")
   const [loading, setLoading] = useState(false)
@@ -64,7 +64,10 @@ export default function AdminPanel() {
     try {
       const response = await fetch("/api/admin/settings")
       const data = await response.json()
-      setSettings(data.settings)
+      setSettings({
+        main_channel_id: data.settings?.main_channel_id || "",
+        invite_link: data.settings?.invite_link || "",
+      })
     } catch (error) {
       console.error("Error fetching settings:", error)
     }
@@ -73,14 +76,55 @@ export default function AdminPanel() {
   const updateSettings = async () => {
     setLoading(true)
     try {
-      await fetch("/api/admin/settings", {
+      console.log("Sending settings:", settings)
+
+      const response = await fetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),
       })
-      alert("Ayarlar güncellendi!")
+
+      const result = await response.json()
+      console.log("Settings update result:", result)
+
+      if (response.ok) {
+        alert("✅ Ayarlar başarıyla güncellendi!")
+        await fetchSettings()
+      } else {
+        alert(`❌ Hata: ${result.error || "Bilinmeyen hata"}`)
+      }
     } catch (error) {
-      alert("Hata oluştu!")
+      console.error("Settings update error:", error)
+      alert("❌ Ayarlar güncellenirken hata oluştu!")
+    }
+    setLoading(false)
+  }
+
+  const createInviteLink = async () => {
+    if (!settings.main_channel_id) {
+      alert("Önce kanal ID'sini girin!")
+      return
+    }
+
+    setLoading(true)
+    try {
+      const response = await fetch("/api/admin/create-invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId: settings.main_channel_id }),
+      })
+
+      const result = await response.json()
+
+      if (response.ok && result.invite_link) {
+        setSettings({ ...settings, invite_link: result.invite_link })
+        alert("✅ Davet linki oluşturuldu!")
+      } else {
+        alert(`❌ Hata: ${result.error || "Davet linki oluşturulamadı"}`)
+      }
+    } catch (error) {
+      console.error("Create invite link error:", error)
+      alert("❌ Davet linki oluşturulurken hata oluştu!")
     }
     setLoading(false)
   }
@@ -112,7 +156,7 @@ export default function AdminPanel() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <Settings className="w-8 h-8" />
-        <h1 className="text-3xl font-bold">Admin Panel</h1>
+        <h1 className="text-3xl font-bold">Admin Panel - Private Kanal</h1>
       </div>
 
       {/* Stats Cards */}
@@ -151,7 +195,7 @@ export default function AdminPanel() {
       <Tabs defaultValue="users" className="space-y-4">
         <TabsList>
           <TabsTrigger value="users">Kullanıcılar</TabsTrigger>
-          <TabsTrigger value="settings">Ayarlar</TabsTrigger>
+          <TabsTrigger value="settings">Private Kanal Ayarları</TabsTrigger>
           <TabsTrigger value="announcement">Duyuru</TabsTrigger>
         </TabsList>
 
@@ -187,22 +231,22 @@ export default function AdminPanel() {
         <TabsContent value="settings">
           <Card>
             <CardHeader>
-              <CardTitle>Bot Ayarları</CardTitle>
-              <CardDescription>Ana kanal linkini ve diğer bot ayarlarını yönetin</CardDescription>
+              <CardTitle>Private Kanal Ayarları</CardTitle>
+              <CardDescription>Private kanal için özel davet linki oluşturun ve ayarları yönetin</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="channel-link">Ana Kanal Linki</Label>
-                <Input
-                  id="channel-link"
-                  placeholder="@your_channel"
-                  value={settings.main_channel_link}
-                  onChange={(e) => setSettings({ ...settings, main_channel_link: e.target.value })}
-                />
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-2">🔒 Private Kanal Kurulumu:</h4>
+                <ol className="text-sm text-blue-700 space-y-1">
+                  <li>1. Bot'u kanalınıza admin olarak ekleyin</li>
+                  <li>2. Kanal ID'sini aşağıya girin</li>
+                  <li>3. "Davet Linki Oluştur" butonuna tıklayın</li>
+                  <li>4. Ayarları kaydedin</li>
+                </ol>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="channel-id">Ana Kanal ID</Label>
+                <Label htmlFor="channel-id">Kanal ID</Label>
                 <Input
                   id="channel-id"
                   placeholder="-1001234567890"
@@ -211,9 +255,35 @@ export default function AdminPanel() {
                 />
               </div>
 
-              <Button onClick={updateSettings} disabled={loading}>
-                {loading ? "Güncelleniyor..." : "Ayarları Güncelle"}
+              <div className="space-y-2">
+                <Label htmlFor="invite-link">Davet Linki</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="invite-link"
+                    placeholder="https://t.me/+xxxxx"
+                    value={settings.invite_link}
+                    onChange={(e) => setSettings({ ...settings, invite_link: e.target.value })}
+                    readOnly
+                  />
+                  <Button onClick={createInviteLink} disabled={loading} variant="outline">
+                    <LinkIcon className="w-4 h-4 mr-2" />
+                    Oluştur
+                  </Button>
+                </div>
+              </div>
+
+              <Button onClick={updateSettings} disabled={loading} className="w-full">
+                {loading ? "Güncelleniyor..." : "Ayarları Kaydet"}
               </Button>
+
+              {settings.invite_link && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <h4 className="font-medium text-green-800 mb-2">✅ Davet Linki Hazır!</h4>
+                  <p className="text-sm text-green-700">
+                    Bu link ile kullanıcılar kanala katılma isteği gönderebilir. İstekler otomatik onaylanacak.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
